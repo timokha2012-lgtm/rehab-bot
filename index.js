@@ -1,54 +1,41 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-  polling: true
-});
+const token = '8359587585:AAH5OMtbGSEmd2wvCVA5cr3nrDwHjqOB3tk';
 
-// Хранилище состояний пользователей
-const userState = {};
+const bot = new TelegramBot(token, { polling: true });
 
-// Вопросы
-const questions = [
-  "Ты сейчас живешь в правде или играешь роль?",
-  "Где ты сейчас врешь себе?",
-  "Что ты избегал последние 7 дней?",
-  "Если ничего не менять — где ты окажешься через 3 месяца?",
-  "Ты хочешь выйти из этого реально или просто уменьшить боль?"
-];
+let userState = {};
 
-// Старт
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
 
-  userState[chatId] = 0;
+  userState[chatId] = 1;
 
-  bot.sendMessage(chatId, "Начинаем. Отвечай честно.\n\nВопрос 1:\n" + questions[0]);
+  bot.sendMessage(chatId, 'Ты в диагностике. Отвечай честно.\n\nВопрос 1:\nТы сейчас живешь в правде или играешь роль?');
 });
 
-// Обработка сообщений
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
 
-  if (!userState.hasOwnProperty(chatId)) return;
+  if (!userState[chatId]) return;
+
   if (msg.text === '/start') return;
 
-  let step = userState[chatId];
+  if (userState[chatId] === 1) {
+    userState[chatId] = 2;
+    bot.sendMessage(chatId, 'Вопрос 2:\nГде ты чаще всего врешь себе?');
+    return;
+  }
 
-  step++;
+  if (userState[chatId] === 2) {
+    userState[chatId] = 3;
+    bot.sendMessage(chatId, 'Вопрос 3:\nЧто ты избегаешь менять прямо сейчас?');
+    return;
+  }
 
-  if (step < questions.length) {
-    userState[chatId] = step;
-
-    bot.sendMessage(
-      chatId,
-      "Принял.\n\nВопрос " + (step + 1) + ":\n" + questions[step]
-    );
-  } else {
-    delete userState[chatId];
-
-    bot.sendMessage(
-      chatId,
-      "Ты дошел до конца.\n\nЕсли ты был честен — ты уже видишь, где проблема.\n\nДальше либо действие, либо откат назад."
-    );
+  if (userState[chatId] === 3) {
+    userState[chatId] = 0;
+    bot.sendMessage(chatId, 'Диагностика закончена.\n\nЕсли было неприятно — значит попало.');
+    return;
   }
 });
