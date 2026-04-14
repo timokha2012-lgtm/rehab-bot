@@ -135,6 +135,28 @@ async function getFinalAnalysis(questionsAndAnswers) {
   );
 }
 
+// Краткий разбор для администратора — что увидел, как начать разговор
+async function getAdminBrief(questionsAndAnswers, userName) {
+  const systemPrompt = `Ты — супервизор психолога-практика. Твоя задача: дать специалисту короткую выжимку по клиенту который только что прошёл диагностику.
+
+Напиши три блока без заголовков, каждый с новой строки:
+
+1. Ключевое: одна фраза — что реально происходит с этим человеком (не симптом, а суть)
+2. Защита: от чего он прячется и чем прикрывается — конкретно, его словами
+3. Первая фраза: буквально одно предложение которое специалист может написать этому человеку прямо сейчас чтобы начать живой разговор — цепляющее, личное, без шаблонов
+
+Коротко. Практично. Без воды.`;
+
+  const content = questionsAndAnswers.map((qa, i) =>
+    `В: ${qa.question}\nО: ${qa.answer}`
+  ).join('\n\n');
+
+  return await callClaude(
+    [{ role: 'user', content: `Пользователь: ${userName}\n\nОтветы:\n\n${content}` }],
+    systemPrompt
+  );
+}
+
 function startDiagnostic(chatId, userName) {
   sessions[chatId] = {
     step: 0,
@@ -207,6 +229,17 @@ async function finishDiagnostic(chatId) {
   const chunks = adminMessage.match(/.{1,4000}/gs) || [];
   for (const chunk of chunks) {
     await bot.sendMessage(ADMIN_CHAT_ID, chunk);
+  }
+
+  // Отправляем администратору краткий разбор для первого сообщения
+  try {
+    const brief = await getAdminBrief(questionsAndAnswers, userName);
+    await bot.sendMessage(
+      ADMIN_CHAT_ID,
+      `💡 Разбор для тебя:\n\n${brief}`
+    );
+  } catch (e) {
+    console.error('Admin brief error:', e);
   }
 
   delete sessions[chatId];
