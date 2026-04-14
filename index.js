@@ -195,15 +195,22 @@ async function finishDiagnostic(chatId) {
 
   await bot.sendMessage(
     chatId,
-    'Если это попало — значит есть смысл поговорить вживую. Там где разбор, там и выход.',
+    'Если это попало — значит есть смысл поговорить вживую.\n\nОставь контакт — я напишу тебе лично.',
     {
       reply_markup: {
-        inline_keyboard: [
-          [{ text: '💬 Написать Диме', url: `https://t.me/${ADMIN_USERNAME}` }]
-        ]
+        keyboard: [
+          [{ text: '📱 Поделиться контактом', request_contact: true }],
+          [{ text: '💬 Написать Диме сам', }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
       }
     }
   );
+  
+  // Сохраняем состояние ожидания контакта
+  sessions[chatId] = sessions[chatId] || {};
+  sessions[chatId].waitingContact = true;
 
   // Уведомление администратору
   const adminLines = [
@@ -268,12 +275,57 @@ bot.onText(/\/help/, (msg) => {
   bot.sendMessage(chatId, `/start — начать диагностику\n/reset — сбросить сессию\n/help — помощь`);
 });
 
+// Обработка контакта
+bot.on('contact', async (msg) => {
+  const chatId = msg.chat.id;
+  const contact = msg.contact;
+  const phone = contact.phone_number;
+  const name = contact.first_name || '';
+
+  await bot.sendMessage(
+    chatId,
+    'Контакт получен. Напишу тебе в ближайшее время.',
+    { reply_markup: { remove_keyboard: true } }
+  );
+
+  // Уведомляем администратора с номером телефона
+  const userName = sessions[chatId]?.userName || 'Аноним';
+  await bot.sendMessage(
+    ADMIN_CHAT_ID,
+    `📱 Контакт от ${userName}:\nИмя: ${name}\nТелефон: ${phone}\nid: ${chatId}`
+  );
+  
+  if (sessions[chatId]) {
+    sessions[chatId].waitingContact = false;
+  }
+});
+
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
 
   if (!text) return;
   if (text.startsWith('/')) return;
+  
+  // Если нажал "Написать Диме сам"
+  if (text === '💬 Написать Диме сам') {
+    await bot.sendMessage(
+      chatId,
+      `Вот я: @${ADMIN_USERNAME}`,
+      { reply_markup: { remove_keyboard: true } }
+    );
+    if (sessions[chatId]) sessions[chatId].waitingContact = false;
+    return;
+  }
+  
+  // Если ждём контакт — напоминаем
+  if (sessions[chatId]?.waitingContact) {
+    await bot.sendMessage(
+      chatId,
+      'Нажми кнопку "Поделиться контактом" ниже — или напиши Диме сам.',
+    );
+    return;
+  }
 
   if (!sessions[chatId]) {
     await bot.sendMessage(chatId, 'Нажми /start чтобы начать.');
